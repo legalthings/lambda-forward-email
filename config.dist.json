@@ -1,0 +1,10 @@
+{
+  "from": "YOUR FROM MAIL",
+  "forward": "YOUR FORWARD MAIL",
+  "bucket": "YOUR BUCKET NAME",
+  "region": "YOUR REGION",
+  "ses": {
+    "accessKeyId": "YOUR ID",
+    "secretAccessKey": "YOUR SECRET ACCESS KEY"
+  }
+}

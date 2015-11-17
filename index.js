@@ -2,8 +2,6 @@ var aws = require('aws-sdk');
 var config = require('./config.json');
 
 var ses = new aws.SES({
-    accessKeyId: config.ses.accessKeyId,
-    secretAccessKey: config.ses.secretAccessKey,
     region: config.region
 });
 var s3 = new aws.S3({
@@ -29,66 +27,56 @@ exports.handler = function(event, context) {
         Key: key
     }, function(err, data) {
         if (err) {
-            console.log(err, err.stack);
-            context.fail();
-        } else {
-			mail(data);
+            console.warn(err, err.stack);
+            return context.fail(err);
         }
+        
+        mail(data, function(err) {
+            if (err) {
+                console.warn(err, err.stack);
+                return context.fail(err);
+            }
+            
+            context.succeed('Forwarded e-mail for ' + to + ' to ' + forward);
+        });
     });
 
-	function mail(data) {
-		var mailparser = new MailParser();
-		mailparser.write(new Buffer(data.Body, 'binary'));
-		mailparser.end();
+    function mail(data, callback) {
+        var mailparser = new MailParser();
+        mailparser.write(new Buffer(data.Body, 'binary'));
+        mailparser.end();
 
-		mailparser.on("end", function(mailObj) {
-			var attachments = [];
+        mailparser.on("end", function(mailObj) {
+            var attachments = [];
 
-			mailObj.attachments.forEach(function(attachment) {
-				attachments.push(
-					{
-						'filename': attachment.fileName,
-						'content': attachment.content,
-						'contentDisposition': attachment.contentDisposition,
-						'charset': attachment.charset,
-						'length': attachment.length
-					}
-				);
-			});
+            mailObj.attachments.forEach(function(attachment) {
+                attachments.push({
+                    'filename': attachment.fileName,
+                    'content': attachment.content,
+                    'contentDisposition': attachment.contentDisposition,
+                    'charset': attachment.charset,
+                    'length': attachment.length
+                });
+            });
 
-			var mailOptions = {
-				from: config.from,
-				to: forward,
-				subject: subject,
-				html: mailObj.html,
-				attachments: attachments
-			};
+            var mailOptions = {
+                from: config.from,
+                to: forward,
+                subject: subject,
+                html: mailObj.html,
+                attachments: attachments
+            };
 
-			var composer = mailcomposer(mailOptions);
+            var composer = mailcomposer(mailOptions);
 
-			composer.build(function(err, msg) {
-				if (err) {
-					console.log(err, err.stack);
-				} else {
-					ses.sendRawEmail({
-						RawMessage: {
-							Data: msg
-						}
-					}, function (err, data) {
-						if (err) {
-							console.log(err, err.stack);
-						}
-						else {
-							context.succeed("ok");
-						}
-					});
-				}
-			});
-		});
-	}
-
-	function logErrors(err) {
-		console.log(err, err.stack);
-		context.fail();
-	}
+            composer.build(function(err, msg) {
+                if (err) return callback(err);
+                
+                ses.sendRawEmail({
+                    RawMessage: { Data: msg }
+                }, callback);
+            });
+        });
+    }
 };
+

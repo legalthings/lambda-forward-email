@@ -1,6 +1,7 @@
 {
-  "from": "YOUR FROM MAIL",
-  "forward": "YOUR FORWARD MAIL",
+  "from": "YOUR FROM EMAIL ADDRESS",
+  "forward": "YOUR FORWARD EMAIL ADDRESS OR DOMAIN",
   "bucket": "YOUR BUCKET NAME",
   "region": "YOUR REGION"
 }
+

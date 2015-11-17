@@ -18,7 +18,7 @@ exports.handler = function(event, context) {
     var inbound = event.Records[0].ses;
     var to = inbound.mail.commonHeaders.to.splice(0)[0];
     var address = to.substr(0, to.indexOf('@'));
-    var forward = address + config.forward;
+    var forward = config.forward.indexOf('@') ? address + config.forward : config.forward;
     var subject = inbound.mail.commonHeaders.subject;
     var key = inbound.mail.messageId;
 

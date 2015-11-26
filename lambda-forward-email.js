@@ -3,8 +3,10 @@
 
   var fs = require('fs');
   var aws = require('aws-sdk');
+  var cheerio = require('cheerio');
   var mailcomposer = require('mailcomposer');
   var MailParser = require('mailparser').MailParser;
+  var _ = require('lodash');
 
   function LambdaForwardEmail(from, bucketName, options) {
     var awsOptions = {};
@@ -29,6 +31,49 @@
     this.mappings.domainToEmail  = options.mappings.domainToEmail  || {};
     this.mappings.domainToDomain = options.mappings.domainToDomain || {};
   }
+
+  var forwardTemplate = _.template([
+    '-------- Forwarded Message --------',
+    'Subject:    ${subject}',
+    'Date:       ${date}',
+    'From:       ${from}',
+    'To:         ${to}'
+  ].join('\n'));
+
+  LambdaForwardEmail.addForwardHeader = function (mailObj, subject, originalDate, originalSender, tos, ccs) {
+    var forwardHeader = forwardTemplate(
+      {subject:subject,
+       date: originalDate,
+       from: originalSender,
+       to: tos.join(', ')
+      });
+
+    if (ccs && ccs.length > 0) {
+      forwardHeader += '\n' + 'Cc:         ' + ccs.join(', ');
+    }
+
+    if (mailObj.text) {
+      mailObj.text = forwardHeader +'\n' + mailObj.text;
+    }
+
+    if (mailObj.html){
+      var $ = cheerio.load(mailObj.html);
+      var span = $('<span />').text(forwardHeader);
+
+      if (mailObj.html.match(/body/i)) {
+        // bugs in escaping could lead to security issues
+        $('body').prepend(span);
+        var newHtml = $.html();
+        mailObj.html = newHtml;
+      }
+      else {
+        // get outer html
+        var temp = $('<div>').append($(span).clone()).html();
+        mailObj.html = temp + '\n' + mailObj.html;
+      }
+    }
+  };
+
 
   LambdaForwardEmail.prototype.translateEmail = function(email) {
     if (email in this.mappings.emailToEmail) {
@@ -57,6 +102,9 @@
     var inbound = event.Records[0].ses;
     var subject = inbound.mail.commonHeaders.subject;
     var key = inbound.mail.messageId;
+
+    var originalSender = inbound.mail.commonHeaders.from;
+    var originalDate = inbound.mail.commonHeaders.date;
 
     var inboundTos = inbound.mail.commonHeaders.to || [];
     var inboundCCs = inbound.mail.commonHeaders.cc || [];
@@ -120,6 +168,14 @@
           });
         }
 
+        LambdaForwardEmail.addForwardHeader(
+          mailObj,
+          subject,
+          originalDate,
+          originalSender,
+          inboundTos,
+          inboundCCs
+        );
         var mailOptions = {
           from: that.from,
           to: tos,
@@ -137,7 +193,6 @@
             that.testCallback(err);
             return callback(err);
           };
-
           ses.sendRawEmail({
             RawMessage: { Data: msg }
           }, function(sesError, arg) {

@@ -13,7 +13,7 @@
             ],
             "returnPath": "janedoe@example.com",
             "messageId": "<0123456789example.com>",
-            "date": "Wed, 7 Oct 2015 12:34:56 -0700",
+            "date": "Mon, 1 Jan 2000 00:00:00 -0000",
             "subject": "Hi"
           },
           "source": "janedoe@example.com",
@@ -44,7 +44,7 @@
             },
             {
               "name": "Date",
-              "value": "Wed, 7 Oct 2015 12:34:56 -0700"
+              "value": "Mon, 1 Jan 2000 00:00:00 -0000"
             },
             {
               "name": "Message-ID",
@@ -52,7 +52,7 @@
             },
             {
               "name": "Subject",
-              "value": "Test Subject"
+              "value": "Hi"
             },
             {
               "name": "To",

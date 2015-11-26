@@ -1,7 +1,11 @@
 {
   "from": "YOUR FROM EMAIL ADDRESS",
-  "forward": "YOUR FORWARD EMAIL ADDRESS OR DOMAIN",
   "bucket": "YOUR BUCKET NAME",
-  "region": "YOUR REGION"
+  "region": "YOUR REGION",
+  "mappings": {
+      "emailToEmail": {"sint@castle.es": "santa@north.pole"},
+      "domainToEmail": {"world.com": "hello@world.com"},
+      "domainToDomain": {"blue.com": "red.com"}
+  }
 }
 

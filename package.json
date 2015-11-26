@@ -6,15 +6,15 @@
   "dependencies": {
     "aws-sdk": "~2.2.17",
     "mailcomposer": "~2.1.0",
-    "mailparser": "~0.5.3"
+    "mailparser": "~0.5.3",
+    "lodash": "~3.10.1"
   },
   "devDependencies": {
     "node-lambda": "~0.6.1",
     "jasmine": "~2.3.2",
     "mock-aws-s3": "~2.0.0",
     "buffer-equal": "0.0.1",
-    "async": "~1.5.0",
-    "lodash": "~3.10.1"
+    "async": "~1.5.0"
   },
   "author": "LegalThings",
   "license": "BSD-2-Clause"

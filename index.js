@@ -11,20 +11,13 @@
     region: config.region
   });
 
-  var fs = require('fs');
-  var mailcomposer = require('mailcomposer');
-  var MailParser = require('mailparser').MailParser;
-
-  var bucketName = config.bucket;
   var LambdaForwardEmail = require('./lambda-forward-email');
   var forwarder = new LambdaForwardEmail(
-    'Forwarder <forwarder@email.net>',
-    'emailBucket',
+    config.from,
+    config.bucket,
     {
-      emailToEmail: {'sint@castle.es': 'santa@north.pole'},
-      domainToEmail: {'world.com': 'hello@world.com'},
-      domainToDomain: {'blue.com': 'red.com'},
-      s3: s3,
+      mappings: config.mappings,
+      s3 : s3,
       ses: ses
     }
   );

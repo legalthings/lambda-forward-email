@@ -13,6 +13,7 @@
   var LambdaForwardEmail = require('./lambda-forward-email');
 
   var EVENT_DATA_TEMPLATE = fs.readFileSync('./test-event.json');
+  var DEFAULT_DATE = 'Mon, 1 Jan 2000 00:00:00 -0000';
 
   var makeSesMock = function(callback) {
     var response = {
@@ -34,17 +35,6 @@
     params: { Bucket: 'testBucket' }
   });
 
-  var forwardTemplate = _.template([
-    '-------- Forwarded Message --------',
-    'Subject:    ${subject}',
-    'Date:       ${date}',
-    'From:       ${from}',
-    'To:         ${to}'
-    ].join(endOfLine)
-  );
-  function addForwardTextHeader() {
-    
-  }
 
   var TestData = {
   };
@@ -55,26 +45,36 @@
     event.Records[0].ses.mail.commonHeaders.to = data.tos.before;
     event.Records[0].ses.mail.commonHeaders.cc = data.ccs.after;
     event.Records[0].ses.mail.commonHeaders.subject = data.subject;
+    event.Records[0].ses.mail.commonHeaders.date = DEFAULT_DATE;
 
     var mailBeforeOptions = {
-      from: data.from,
+      from: data.from.before,
       to: data.tos.before,
       cs: data.ccs.before,
       subject: data.subject,
-      html: data.html,
-      text: data.text,
+      html: data.html.before,
+      text: data.text.before,
       attachments: data.attachments
     };
 
     var mailAfterOptions = {
-      from: data.from,
+      from: data.from.after,
       to: data.tos.after,
       cs: data.ccs.after,
       subject: data.subject,
-      html: data.html,
-      text: data.text,
+      html: data.html.after,
+      text: data.text.after,
       attachments: data.attachments
     };
+
+    LambdaForwardEmail.addForwardHeader(
+      mailAfterOptions,
+      data.subject,
+      DEFAULT_DATE,
+      data.from.before,
+      data.tos.before,
+      data.ccs.before
+    );
 
     function compose(mailOptions, callback) {
       var composer = mailcomposer(mailOptions);
@@ -118,9 +118,13 @@
       before: [],
       after: []
     },
-    from: "Unit <unit@test.com>",
+    from: {
+      before: 'Jane Doe <janedoe@example.com>',
+      after: 'Unit <unit@test.com>'
+    },
     subject: "Hi",
-    text: 'Hello world'
+    text: 'Hello world!',
+    html: '<html><body><span>Hello world!</span></body></html>' 
   };
 
   var ATTACHMENTS = [
@@ -199,7 +203,7 @@
 
   function makeForwarder() {
     return new LambdaForwardEmail(
-      'Unit <unit@test.com>',
+      'Unit <forward@unit.com>',
       'testBucket',
       FORWARDER_SETTINGS
     );
@@ -386,6 +390,7 @@
       jasmine.addMatchers(customMatcher);
       setupTests(done);
     });
+
     describe('email translation email',function(){
       it('should translate', function() {
         var forwarder = makeForwarder();
@@ -396,24 +401,129 @@
       });
     });
 
-    it('should forward email with single to', function(done) {
-      var testData = TestData.test1;
-      runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
+    describe('should add forwarding text', function() {
+      it('without cc', function(){
+        var mail = {
+          text: 'Hello world!',
+          html: '<html><body><span>Hello world!</span></body></html>' 
+        };
+        LambdaForwardEmail.addForwardHeader(
+          mail,
+          'Hello World',
+          DEFAULT_DATE,
+          'Jane Doe <janedoe@example.com>',
+          ['a@letter.me', 'b@letter.me']
+        );
+
+        expect(mail.text).toBe([
+          '-------- Forwarded Message --------',
+          'Subject:    Hello World',
+          'Date:       Mon, 1 Jan 2000 00:00:00 -0000',
+          'From:       Jane Doe <janedoe@example.com>',
+          'To:         a@letter.me, b@letter.me',
+          'Hello world!'
+        ].join('\n'));
+        expect(mail.html).toBe([
+          '<html><body><span>-------- Forwarded Message --------',
+          'Subject:    Hello World',
+          'Date:       Mon, 1 Jan 2000 00:00:00 -0000',
+          'From:       Jane Doe &lt;janedoe@example.com&gt;',
+          'To:         a@letter.me, b@letter.me' +
+            '</span><span>Hello world!</span></body></html>'
+        ].join('\n'));
+      });
+
+      it('with cc', function(){
+        var mail = {
+          text: 'Hello world!',
+          html: '<html><body><span>Hello world!</span></body></html>' 
+        };
+        LambdaForwardEmail.addForwardHeader(
+          mail,
+          'Hello World',
+          DEFAULT_DATE,
+          'Jane Doe <janedoe@example.com>',
+          ['a@letter.me', 'b@letter.me'],
+          ['d@letter.me', 'e@letter.me']
+        );
+
+        expect(mail.text).toBe([
+          '-------- Forwarded Message --------',
+          'Subject:    Hello World',
+          'Date:       Mon, 1 Jan 2000 00:00:00 -0000',
+          'From:       Jane Doe <janedoe@example.com>',
+          'To:         a@letter.me, b@letter.me',
+          'Cc:         d@letter.me, e@letter.me',
+          'Hello world!'
+        ].join('\n'));
+        expect(mail.html).toBe([
+          '<html><body><span>-------- Forwarded Message --------',
+          'Subject:    Hello World',
+          'Date:       Mon, 1 Jan 2000 00:00:00 -0000',
+          'From:       Jane Doe &lt;janedoe@example.com&gt;',
+          'To:         a@letter.me, b@letter.me',
+          'Cc:         d@letter.me, e@letter.me'  +
+            '</span><span>Hello world!</span></body></html>'
+        ].join('\n'));
+      });
+
+      it('with cc, no body tag in html', function(){
+        var mail = {
+          text: 'Hello world!',
+          html: '<span>Hello world!</span>' 
+        };
+        LambdaForwardEmail.addForwardHeader(
+          mail,
+          'Hello World',
+          DEFAULT_DATE,
+          'Jane Doe <janedoe@example.com>',
+          ['a@letter.me', 'b@letter.me'],
+          ['d@letter.me', 'e@letter.me']
+        );
+
+        expect(mail.text).toBe([
+          '-------- Forwarded Message --------',
+          'Subject:    Hello World',
+          'Date:       Mon, 1 Jan 2000 00:00:00 -0000',
+          'From:       Jane Doe <janedoe@example.com>',
+          'To:         a@letter.me, b@letter.me',
+          'Cc:         d@letter.me, e@letter.me',
+          'Hello world!'
+        ].join('\n'));
+        expect(mail.html).toBe([
+          '<span>-------- Forwarded Message --------',
+          'Subject:    Hello World',
+          'Date:       Mon, 1 Jan 2000 00:00:00 -0000',
+          'From:       Jane Doe &lt;janedoe@example.com&gt;',
+          'To:         a@letter.me, b@letter.me',
+          'Cc:         d@letter.me, e@letter.me</span>',
+          '<span>Hello world!</span>'
+        ].join('\n'));
+      });
+
     });
 
-    it('should forward email with multiple to', function(done) {
-      var testData = TestData.test2;
-      runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
-    });
+    describe('should forward email', function() {
+      it('with single to', function(done) {
+        var testData = TestData.test1;
+        runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
+      });
 
-    it('should forward email with multiple to and cc', function(done) {
-      var testData = TestData.test3;
-      runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
-    });
+      it('with multiple to', function(done) {
+        var testData = TestData.test2;
+        runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
+      });
 
-    it('should forward email with multiple to and cc and attachments', function(done) {
-      var testData = TestData.test4;
-      runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
+      it('with multiple to and cc', function(done) {
+        var testData = TestData.test3;
+        runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
+      });
+
+      it('with multiple to and cc and attachments', function(done) {
+        var testData = TestData.test4;
+        runTest(makeForwarder(), testData.event, standardTester(expect, done, testData.expected));
+      });
+
     });
 
     it('should fail when no mapping is available for the target email', function(done) {

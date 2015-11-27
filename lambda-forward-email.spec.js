@@ -4,12 +4,10 @@
   var bufferEqual = require('buffer-equal');
   var async_ = require('async');
   var fs = require('fs');
-  var aws = require('aws-sdk');
   var _   = require('lodash');
   var AWSMock = require('mock-aws-s3');
   var MailParser = require('mailparser').MailParser;
   var mailcomposer = require('mailcomposer');
-  var endOfLine = require('os').EOL;
   var LambdaForwardEmail = require('./lambda-forward-email');
 
   var EVENT_DATA_TEMPLATE = fs.readFileSync('./test-event.json');
@@ -28,8 +26,7 @@
     };
   };
 
-  var sesMock = makeSesMock(function(rawData) {
-  });
+  var sesMock = makeSesMock(function() {});
 
   var s3Mock = AWSMock.S3({
     params: { Bucket: 'testBucket' }
@@ -122,7 +119,7 @@
       before: 'Jane Doe <janedoe@example.com>',
       after: 'Unit <unit@test.com>'
     },
-    subject: "Hi",
+    subject: 'Hi',
     text: 'Hello world!',
     html: '<html><body><span>Hello world!</span></body></html>' 
   };
@@ -131,12 +128,14 @@
     {
       filename: 'receipt1.txt',
       content: 'crocodile steak $30',
-      contentType: 'text/plain'
+      contentType: 'text/plain',
+      contentTransferEncoding: 'quoted-printable'
     },
     {
       filename: 'receipt2.txt',
       content: 'wodka $30',
-      contentType: 'text/plain'
+      contentType: 'text/plain',
+      contentTransferEncoding: 'quoted-printable'
     },
   ];
 
@@ -217,9 +216,9 @@
       };
     }
 
-    for (var testid in EMAILS) {
-      work.push(worker(testid));
-    }
+    _.forEach(EMAILS, function(_, testId) {
+      work.push(worker(testId));
+    });
 
     async_.parallel(work, function(err) {
       if (err) throw err;
@@ -229,7 +228,7 @@
   }
 
   function compareAttachment(attach1, attach2) {
-    var keys = ['fileName', 'contentDisposition', 'length', 'contentType', 'checksum'];
+    var keys = ['fileName', 'contentDisposition', 'length', 'contentType', 'checksum', 'transferEncoding'];
 
     for (var i = 0; i < keys.length; i++) {
       var arg1 = attach1[keys[i]];
@@ -311,8 +310,8 @@
     var attachments2 = obj2.attachments || [];
     if (attachments1.length !== attachments2.length) {
       result.pass = false;
-      result.message = 'Expected mails to have the same number of attachments, found '
-        + attachments1.length + ' ' + attachments2.length + ' , in first and second mail respectively.';
+      result.message = 'Expected mails to have the same number of attachments, found ' +
+        attachments1.length + ' ' + attachments2.length + ' , in first and second mail respectively.';
       return result;
     }
 
@@ -353,7 +352,7 @@
   }
 
   function runTest(forwarder, event, callback) {
-    var context = makeLambdaContext(function(lambdaError, arg) {
+    var context = makeLambdaContext(function(lambdaError) {
       if (lambdaError) {
         callback(lambdaError, null, null);
       }
@@ -385,7 +384,6 @@
   }
 
   describe('lambda-forward-email', function() {
-    var expectedMailObject;
     beforeAll(function(done) {
       jasmine.addMatchers(customMatcher);
       setupTests(done);
@@ -528,7 +526,7 @@
 
     it('should fail when no mapping is available for the target email', function(done) {
       var testData = TestData.test5;
-      runTest(makeForwarder(), testData.event, function(lambdaError, sesError) {
+      runTest(makeForwarder(), testData.event, function(lambdaError) {
         expect(lambdaError).toBe('None of the mails has a mapping.');
         done();
       });

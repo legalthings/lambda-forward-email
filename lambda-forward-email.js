@@ -1,7 +1,6 @@
 (function (){
   'use strict';
 
-  var fs = require('fs');
   var aws = require('aws-sdk');
   var cheerio = require('cheerio');
   var mailcomposer = require('mailcomposer');
@@ -136,7 +135,7 @@
         return context.fail(err);
       }
 
-      mail(data, function(err, arg) {
+      mail(data, function(err) {
         if (err) {
           console.warn(err, err.stack);
           return context.fail(err);
@@ -151,7 +150,7 @@
       mailparser.write(new Buffer(data.Body, 'binary'));
       mailparser.end();
 
-      mailparser.on("end", function(mailObj) {
+      mailparser.on('end', function(mailObj) {
         var attachments = [];
 
         if (mailObj.attachments) {
@@ -163,7 +162,8 @@
               'contentDisposition': attachment.contentDisposition,
               'charset': attachment.charset,
               'length': attachment.length,
-              'contentType': attachment.contentType
+              'contentType': attachment.contentType,
+              'contentTransferEncoding': attachment.transferEncoding
             });
           });
         }
@@ -192,7 +192,8 @@
           if (err) {
             that.testCallback(err);
             return callback(err);
-          };
+          }
+
           ses.sendRawEmail({
             RawMessage: { Data: msg }
           }, function(sesError, arg) {

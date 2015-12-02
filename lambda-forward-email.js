@@ -1,11 +1,36 @@
 (function (){
   'use strict';
 
+  var path = require('path');
   var aws = require('aws-sdk');
   var cheerio = require('cheerio');
   var mailcomposer = require('mailcomposer');
   var MailParser = require('mailparser').MailParser;
   var _ = require('lodash');
+
+  function parseMailAddress(address) {
+    if (address.indexOf('@') === -1)
+      return null;
+
+    var temp = (address + '@').split('@');
+    var subdomains = temp[1].split('.');
+
+    return {
+      localPart: temp[0],
+      domain: temp[1],
+      subdomains: _.initial(temp[1].split('.'))
+    };
+  }
+
+  function firstExistingProperty(obj, properties, defaultValue) {
+    for (var i = 0; i < properties.length; i++) {
+      if (properties[i] in obj) {
+        return obj[properties[i]];
+      }
+    }
+
+    return defaultValue;
+  }
 
   function LambdaForwardEmail(from, bucketName, options) {
     var awsOptions = {};
@@ -22,6 +47,8 @@
     this.from = from;
 
     this.bucketName = bucketName;
+    this.defaultDirectory = options.defaultDirectory || '';
+    this.directoryMapping = options.directoryMapping || {};
 
     // email faill in only one of these categories.
     this.mappings = {};
@@ -73,24 +100,22 @@
     }
   };
 
-
   LambdaForwardEmail.prototype.translateEmail = function(email) {
-    if (email in this.mappings.emailToEmail) {
+    var parsedAddress = parseMailAddress(email);
+    if (parsedAddress === null)
+      return null;
+
+    var domain = parsedAddress.domain;
+    var to = parsedAddress.localPart;
+
+    if (email in this.mappings.emailToEmail)
       return this.mappings.emailToEmail[email];
-    }
-
-    var temp = (email + '@').split('@');
-    var domain = temp[1];
-    var to = temp[0];
-
-    if (domain in this.mappings.domainToEmail) {
+    else if (domain in this.mappings.domainToEmail)
       return this.mappings.domainToEmail[domain];
-    }
-    else if (domain in this.mappings.domainToDomain) {
+    else if (domain in this.mappings.domainToDomain)
       return to + '@' + this.mappings.domainToDomain[domain];
-    }
-
-    return null;
+    else
+      return null;
   };
 
   LambdaForwardEmail.prototype.handler = function(event, context) {
@@ -100,8 +125,18 @@
 
     var inbound = event.Records[0].ses;
     var subject = inbound.mail.commonHeaders.subject;
-    var key = inbound.mail.messageId;
 
+    var directory;
+    var mailBoxAddress = inbound.mail.destination[0];
+    var parsedAddress = parseMailAddress(mailBoxAddress);
+
+    directory = firstExistingProperty(
+      this.directoryMapping, parsedAddress.subdomains.concat(
+        [mailBoxAddress, parsedAddress.domain]),
+      this.defaultDirectory
+    );
+
+    var key = path.join(directory, inbound.mail.messageId);
     var originalSender = inbound.mail.commonHeaders.from;
     var originalDate = inbound.mail.commonHeaders.date;
 

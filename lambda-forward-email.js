@@ -50,7 +50,7 @@
     this.defaultDirectory = options.defaultDirectory || '';
     this.directoryMapping = options.directoryMapping || {};
 
-    // email faill in only one of these categories.
+    // email can only be in one of these categories.
     this.mappings = {};
 
     this.mappings.emailToEmail   = options.mappings.emailToEmail   || {};
@@ -63,7 +63,8 @@
     'Subject:    ${subject}',
     'Date:       ${date}',
     'From:       ${from}',
-    'To:         ${to}'
+    'To:         ${to}',
+    ''
   ].join('\n'));
 
   LambdaForwardEmail.addForwardHeader = function (mailObj, subject, originalDate, originalSender, tos, ccs) {

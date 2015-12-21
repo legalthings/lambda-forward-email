@@ -18,7 +18,8 @@
     {
       mappings: config.mappings,
       s3 : s3,
-      ses: ses
+      ses: ses,
+      defaultDirectory: config.defaultDirectory
     }
   );
 

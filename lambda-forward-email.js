@@ -18,7 +18,7 @@
     return {
       localPart: temp[0],
       domain: temp[1],
-      subdomains: _.initial(temp[1].split('.'))
+      subdomains: _.initial(subdomains)
     };
   }
 
@@ -63,8 +63,7 @@
     'Subject:    ${subject}',
     'Date:       ${date}',
     'From:       ${from}',
-    'To:         ${to}',
-    ''
+    'To:         ${to}'
   ].join('\n'));
 
   LambdaForwardEmail.addForwardHeader = function (mailObj, subject, originalDate, originalSender, tos, ccs) {

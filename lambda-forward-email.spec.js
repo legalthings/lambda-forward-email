@@ -4,6 +4,7 @@
   var bufferEqual = require('buffer-equal');
   var async_ = require('async');
   var fs = require('fs');
+  var path = require('path');
   var _   = require('lodash');
   var AWSMock = require('mock-aws-s3');
   var MailParser = require('mailparser').MailParser;
@@ -38,11 +39,13 @@
 
   function addTest(testname, data, finalCallback) {
     var event =  JSON.parse(EVENT_DATA_TEMPLATE);
-    event.Records[0].ses.mail.messageId = testname;
-    event.Records[0].ses.mail.commonHeaders.to = data.tos.before;
-    event.Records[0].ses.mail.commonHeaders.cc = data.ccs.after;
-    event.Records[0].ses.mail.commonHeaders.subject = data.subject;
-    event.Records[0].ses.mail.commonHeaders.date = DEFAULT_DATE;
+    var sesMail = event.Records[0].ses.mail;
+    sesMail.messageId = testname;
+    sesMail.commonHeaders.to = data.tos.before;
+    sesMail.commonHeaders.cc = data.ccs.after;
+    sesMail.commonHeaders.subject = data.subject;
+    sesMail.commonHeaders.date = DEFAULT_DATE;
+    sesMail.destination = data.tos.before;
 
     var mailBeforeOptions = {
       from: data.from.before,
@@ -87,7 +90,8 @@
       if (err) throw err;
       async_.parallel([
         function(callback) {
-          s3Mock.putObject({Key: testname, Body: mails.before}, callback);
+          var key = path.join(_.get(data, 'directory', ''), testname);
+          s3Mock.putObject({Key: key, Body: mails.before}, callback);
         },
         function(callback) {
           parseEmail(mails.after, function(mailObj) {
@@ -178,6 +182,34 @@
         before: ['unkown@gaurdian.com'],
         after: []
       }
+    }),
+    'test6': _.create(EMAIL_TEMPLATE, {
+      tos: {
+        before: ['mail@blue.com'],
+        after: ['mail@red.com']
+      },
+      directory: 'maildir'
+    }),
+    'test7': _.create(EMAIL_TEMPLATE, {
+      tos: {
+        before: ['domain@blue.com'],
+        after: ['domain@red.com']
+      },
+      directory: 'domaindir'
+    }),
+    'test8': _.create(EMAIL_TEMPLATE, {
+      tos: {
+        before: ['subdomain@bright.blue.com'],
+        after: ['subdomain@bright.red.com']
+      },
+      directory: 'subdomaindir'
+    }),
+    'test9': _.create(EMAIL_TEMPLATE, {
+      tos: {
+        before: ['default@blue.com'],
+        after: ['default@red.com']
+      },
+      directory: 'defaultdir'
     })
   };
 
@@ -196,15 +228,20 @@
     mappings: {
       emailToEmail: {'sint@castle.es': 'santa@north.pole'},
       domainToEmail: {'world.com': 'hello@world.com'},
-      domainToDomain: {'blue.com': 'red.com'}
+      domainToDomain: {
+        'blue.com': 'red.com',
+        'bright.blue.com': 'bright.red.com'
+      }
     }
   };
 
-  function makeForwarder() {
+  function makeForwarder(options) {
+    options = options || {};
+
     return new LambdaForwardEmail(
       'Unit <forward@unit.com>',
       'testBucket',
-      FORWARDER_SETTINGS
+      _.create(FORWARDER_SETTINGS, options)
     );
   }
 
@@ -531,6 +568,47 @@
         done();
       });
     });
+
+    describe('should forward email with specified ', function() {
+      it('directory for a mail', function(done) {
+        jasmine.addMatchers(customMatcher);
+        var testData = TestData.test6;
+        var forwarder = makeForwarder({
+          directoryMapping: {'mail@blue.com': 'maildir'}
+        });
+
+        runTest(forwarder, testData.event, standardTester(expect, done, testData.expected));
+      });
+
+      it('directory for a domain', function(done) {
+        var testData = TestData.test7;
+        var forwarder = makeForwarder({
+          directoryMapping: {'blue.com': 'domaindir'}
+        });
+
+        runTest(forwarder, testData.event, standardTester(expect, done, testData.expected));
+      });
+
+      it('directory for a subdomain', function(done) {
+        var testData = TestData.test8;
+        var forwarder = makeForwarder({
+          directoryMapping: {'bright': 'subdomaindir'}
+        });
+
+        runTest(forwarder, testData.event, standardTester(expect, done, testData.expected));
+      });
+
+      it('default directory', function(done) {
+        var testData = TestData.test9;
+        var forwarder = makeForwarder({
+          defaultDirectory: 'defaultdir'
+        });
+
+        runTest(forwarder, testData.event, standardTester(expect, done, testData.expected));
+      });
+
+    });
+
 
   });
 
